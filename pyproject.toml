@@ -1,0 +1,35 @@
+[project]
+name = "unsloth-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "carlesoctav", email = "carlesoctavianus@tuta.io" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "math-verify>=0.9.0",
+    "sws-config>=0.10.0",
+    "trackio>=0.39.0",
+    "trl[vllm]>=0.24.0",
+    "unsloth>=2026.9.12",
+    "vllm",
+]
+
+[project.scripts]
+unsloth-agent = "unsloth_agent:main"
+
+
+[tool.uv]
+override-dependencies = [
+    "torch==2.13.0",
+    "torchvision==0.28.0",
+    "transformers>=5.10.4",
+    "trl==1.14.1",
+    "vllm==0.30.0",
+    "datasets==5.0.1"
+]
+
+[build-system]
+requires = ["uv_build>=0.12.12,<0.13.0"]
+build-backend = "uv_build"
