@@ -48,6 +48,7 @@ def get_config():
     # config.grpo.temperature = 0.9
     # config.grpo.top_p = 1.0
     config.grpo.log_completions = True
+    config.grpo.num_completions_to_print = 0
     config.grpo.logging_steps = 1
     config.grpo.report_to = "trackio"
     config.grpo.run_name = lambda : f"{config.project_name}_{config.exp_name}"

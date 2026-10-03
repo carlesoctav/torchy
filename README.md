@@ -34,6 +34,6 @@ echo '!tmux new -d -s train "cd /content/unsloth-agent && PYTHONPATH=src python 
 echo '!tmux capture-pane -p -t train | tail -20' | colab exec
 ```
 
-Checkpoints land in `outputs/<project>/<exp>/`; env tables cache in `data/smoldataenvs/` (shared across runs, re-downloaded per VM). Metrics go to trackio (local-first); set `trackio.space_id=<user>/<space>` in the config or CLI to publish the dashboard to a Hugging Face Space.
+Checkpoints land in `outputs/<project>/<exp>/`; env tables cache in `data/smoldataenvs/` (shared across runs, re-downloaded per VM). Metrics go to `outputs/<project>/trackio` (`TRACKIO_DIR`, project level so one dashboard shows all runs); a callback mirrors the project dir to the `bucket_id` bucket on every save and at end (or crash). View a pulled copy with `TRACKIO_DIR=outputs/<project>/trackio python -c "import trackio; trackio.show()"`.
 
 Pull results back with `mycolab pull` (everything) or `colab download` (checkpoints only).
