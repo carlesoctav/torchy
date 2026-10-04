@@ -178,6 +178,6 @@ def test_deepmath_config_finalizes_and_matches_make():
     assert isinstance(builder, sws.Config)
     config, unused = builder.finalize([], return_unused_argv=True)
     assert unused == []
-    assert config.exp_name == "qwen3-4b-grpo-deepmath"
+    assert config.exp_name == "qwen3-4b-grpo-deepmath-new"
     assert config.env_name == "deepmath"
     assert set(config.env.to_dict()) <= set(inspect.signature(env.make).parameters)
