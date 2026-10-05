@@ -1,0 +1,2 @@
+Edit demo: initial line.
+Edit demo: second line added via edit_file.
