@@ -63,7 +63,6 @@ class BucketSyncCallback(TrainerCallback):
             HfApi().sync_bucket(
                 f"{self._local_dir}",
                 self.bucket_url,
-                exclude=["completions/*", "*/completions/*"],
             )
         except Exception as exc:
             warnings.warn(f"BucketSyncCallback: sync failed, will retry: {exc}")

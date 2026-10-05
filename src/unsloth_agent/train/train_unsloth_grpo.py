@@ -35,22 +35,19 @@ def main(config: sws.FinalConfig):
     with config_json.open("w") as f:
         f.write(config.to_json())
 
-    # bucket_sync = BucketSyncCallback(config)
-    # callbacks: list[TrainerCallback] = [bucket_sync]
+    bucket_sync = BucketSyncCallback(config)
+    callbacks: list[TrainerCallback] = [bucket_sync]
     trainer = GRPOTrainer(
         model=model,
         processing_class=tokenizer,
         args=args,
-        # callbacks=callbacks,
+        callbacks=callbacks,
         **env_dict
     )
     try:
         trainer.train()
+        trainer.save_model()
     finally:
-        if config.get("repo_id"):
-            model.push_to_hub_merged(f"{config.repo_id}", tokenizer, save_method = "merged_16bit")
-        else:
-            model.save_pretrained_merged(f"{config.output_dir}/merged", tokenizer, save_method = "merged_16bit")
         bucket_sync.shutdown()
 
 
