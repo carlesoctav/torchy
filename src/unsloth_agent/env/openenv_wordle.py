@@ -66,15 +66,15 @@ class WordleEnv:
         self.done = result.done
         return feedback
 
+    def get_reward(self) -> float:
+        """Return the episode reward for TRL environment reward tracking."""
+        return self.reward
+
 
 def make(
     prompt: str = PROMPT, dataset_size: int = 1000, env_url: str = ENV_URL
 ) -> dict[str, Any]:
-    def reward_fn(environments, **kwargs):
-        return [env.reward for env in environments]
-
-    reward_fn.__name__ = "openenv_wordle"
-    EnvFactory = partial(WordleEnv, env_url = env_url)
+    EnvFactory = partial(WordleEnv, env_url=env_url)
 
     return {
         "train_dataset": Dataset.from_dict(
@@ -84,6 +84,7 @@ def make(
                 ]
             }
         ),
-        "reward_funcs": [reward_fn],
         "environment_factory": EnvFactory,
     }
+
+

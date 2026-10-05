@@ -24,6 +24,6 @@ def unpatch_convert_added_tokens() -> bool:
     return False
 
 
-def unpatch_all() -> None:
+def patch_save_tokenizer() -> None:
     """Call after ``import unsloth`` (and before loading/saving tokenizers)."""
     unpatch_convert_added_tokens()

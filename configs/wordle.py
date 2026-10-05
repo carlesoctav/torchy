@@ -7,7 +7,7 @@ def get_config():
     config.exp_name = "qwen3-1.7b-grpo-wordle"
     config.project_name = "wordle-qwen3"
     config.bucket_id = lambda: f"carlesoctav/{config.project_name}"
-    config.output_dir = lambda: f"outputs/{config.project_name}/{config.exp_name}"
+    config.output_dir = lambda: f"/content/outputs/{config.project_name}/{config.exp_name}"
     config.repo_id = "carlesoctav/qwen3-1.7b-wordle"
     config.seed = 3407
     config.unsloth_standby = True
