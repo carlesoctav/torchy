@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import re
 from functools import partial
 from typing import Any
 
@@ -25,23 +26,36 @@ Follow these rules to play Wordle:
 """
 
 
-class WordleEnv:
-    """One Wordle game per rollout; ``reset`` opens it, ``guess`` plays it."""
+class WordleSparseEnv:
+    """One Wordle game per rollout with sparse outcome reward and duplicate/invalid penalties."""
 
-    def __init__(self, env_url):
+    INVALID_MARKERS = [
+        "You have already guessed",
+        "You attempted an invalid move",
+        "wrong format",
+        "is not an English word",
+        "must be exactly",
+    ]
+
+    def __init__(self, env_url: str):
         # The client is async but TRL's reset() path is sync.
         self.client = TextArenaEnv(base_url=env_url).sync()
         self.reward = 0.0
         self.done = False
+        self.turns = 0
+        self.invalid_count = 0
+        self.guessed_words: set[str] = set()
+        self._last_full_feedback = ""
 
     def reset(self, **kwargs) -> str | None:
         seed = kwargs.get("seed")
         result = self.client.reset(seed=seed) if seed is not None else self.client.reset()
-        # TextArena returns the full game history every turn; keep it so
-        # guess() can slice out just the new feedback.
         self._last_full_feedback = result.observation.messages[0].content
         self.reward = 0.0
         self.done = False
+        self.turns = 0
+        self.invalid_count = 0
+        self.guessed_words.clear()
         return self._last_full_feedback
 
     def guess(self, guess: str) -> str:
@@ -56,16 +70,53 @@ class WordleEnv:
         """
         if self.done:
             raise ValueError("Game over.")
-        result = self.client.step(TextArenaAction(message=guess))
+
+        self.turns += 1
+        guess_str = str(guess).strip()
+
+        # Check for duplicate word or formatting errors locally
+        match = re.search(r"\[([A-Za-z]+)\]", guess_str)
+        is_invalid = False
+        if match:
+            word = match.group(1).lower()
+            if word in self.guessed_words:
+                is_invalid = True
+            self.guessed_words.add(word)
+        else:
+            is_invalid = True
+
+        result = self.client.step(TextArenaAction(message=guess_str))
         full_feedback = result.observation.messages[0].content
         feedback = full_feedback[len(self._last_full_feedback) :]
         self._last_full_feedback = full_feedback
-        # Invalid moves keep the last reward server-side; zero them here.
-        if "You attempted an invalid move" in feedback:
-            self.reward = 0.0
-        else:
-            self.reward = result.reward
+
+        # Also inspect server feedback for invalid move warnings
+        if any(marker in feedback for marker in self.INVALID_MARKERS):
+            is_invalid = True
+
+        if is_invalid:
+            self.invalid_count += 1
+
         self.done = result.done
+
+        # Reward calculation:
+        # TextArena sets reward == 1.0 (or "Congratulations") only when won.
+        won = (result.reward == 1.0) or ("Congratulations" in full_feedback)
+
+        penalty = 0.25 * self.invalid_count
+        if self.done:
+            if won:
+                # Speed bonus: 0.1 for every unused turn remaining (up to +0.5 for a 1-turn win)
+                speed_bonus = max(0, 6 - self.turns) * 0.1
+                # Base win reward = 1.0, minimum floor = 0.2 even with prior mistakes
+                self.reward = max(0.2, 1.0 + speed_bonus - penalty)
+            else:
+                # Loss yields 0.0 minus penalties for invalid/duplicate attempts
+                self.reward = 0.0 - penalty
+        else:
+            # Intermediate step: track accumulated penalty
+            self.reward = 0.0 - penalty
+
         return feedback
 
     def get_reward(self) -> float:
@@ -79,7 +130,11 @@ def make(
     env_url: str = ENV_URL,
     seed: int | None = 42,
 ) -> dict[str, Any]:
-    EnvFactory = partial(WordleEnv, env_url=env_url)
+    def reward_fn(environments, **kwargs):
+        return [env.reward for env in environments]
+
+    reward_fn.__name__ = "wordle_sparse"
+    EnvFactory = partial(WordleSparseEnv, env_url=env_url)
 
     rng = random.Random(seed) if seed is not None else random
     seeds = [rng.randint(0, 2**31 - 1) for _ in range(dataset_size)]
@@ -93,7 +148,6 @@ def make(
                 "seed": seeds,
             }
         ),
+        "reward_funcs": [reward_fn],
         "environment_factory": EnvFactory,
     }
-
-
