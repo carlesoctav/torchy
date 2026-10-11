@@ -69,8 +69,12 @@ def _last_boxed(text: str) -> str | None:
     return None
 
 
-def make_qwen_math_reward(max_completion_length: int = 1024):
-    def qwen_math_reward(completions, solution, completion_ids, **kwargs):
+class QwenMathReward:
+    def __init__(self, max_completion_length: int = 1024):
+        self.max_completion_length = max_completion_length
+        self.__name__ = "qwen_math_reward"
+
+    def __call__(self, completions, solution, completion_ids, **kwargs):
         on_main_thread = threading.current_thread() is threading.main_thread()
         parsing_timeout = 10 if on_main_thread else None
         verify_timeout = 5 if on_main_thread else None
@@ -86,7 +90,7 @@ def make_qwen_math_reward(max_completion_length: int = 1024):
 
         rewards = []
         for completion, gold, ids in zip(completions, solution, completion_ids, strict=True):
-            if max_completion_length > 0 and len(ids) >= max_completion_length:
+            if self.max_completion_length > 0 and len(ids) >= self.max_completion_length:
                 rewards.append(0.0)
                 continue
             answer = _last_boxed(completion[0]["content"])
@@ -108,8 +112,9 @@ def make_qwen_math_reward(max_completion_length: int = 1024):
                 rewards.append(0.0)
         return rewards
 
-    qwen_math_reward.__name__ = "qwen_math_reward"
-    return qwen_math_reward
+
+def make_qwen_math_reward(max_completion_length: int = 1024):
+    return QwenMathReward(max_completion_length=max_completion_length)
 
 
 def format_sample(sample: dict[str, Any]) -> dict[str, Any]:

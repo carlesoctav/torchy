@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
@@ -6070,6 +6070,33 @@ wheels = [
 ]
 
 [[package]]
+name = "torchy"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "kernels" },
+    { name = "math-verify" },
+    { name = "openenv-textarena" },
+    { name = "sws-config" },
+    { name = "trackio" },
+    { name = "trl" },
+    { name = "unsloth" },
+    { name = "vllm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "kernels", specifier = "==0.16.0" },
+    { name = "math-verify", specifier = ">=0.9.0" },
+    { name = "openenv-textarena", git = "https://huggingface.co/spaces/openenv/wordle" },
+    { name = "sws-config", specifier = ">=0.10.0" },
+    { name = "trackio", specifier = ">=0.39.0" },
+    { name = "trl", extras = ["vllm"], git = "https://github.com/carlesoctav/trl" },
+    { name = "unsloth", specifier = ">=2026.9.12" },
+    { name = "vllm" },
+]
+
+[[package]]
 name = "tqdm"
 version = "4.70.1"
 source = { registry = "https://pypi.org/simple" }
@@ -6298,33 +6325,6 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/5c/6b3617d6cf050280bb19aa034eab1d8834733f12f45b4d05540db779396a/unsloth-2026.9.12-py3-none-any.whl", hash = "sha256:0b0a8d5694c693ff7a5183b1df073a2b045f503193d76a0beec1696d1fef6013", size = 25375955, upload-time = "2026-09-28T14:30:02.907Z" },
-]
-
-[[package]]
-name = "unsloth-agent"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "kernels" },
-    { name = "math-verify" },
-    { name = "openenv-textarena" },
-    { name = "sws-config" },
-    { name = "trackio" },
-    { name = "trl" },
-    { name = "unsloth" },
-    { name = "vllm" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "kernels", specifier = "==0.16.0" },
-    { name = "math-verify", specifier = ">=0.9.0" },
-    { name = "openenv-textarena", git = "https://huggingface.co/spaces/openenv/wordle" },
-    { name = "sws-config", specifier = ">=0.10.0" },
-    { name = "trackio", specifier = ">=0.39.0" },
-    { name = "trl", extras = ["vllm"], git = "https://github.com/carlesoctav/trl" },
-    { name = "unsloth", specifier = ">=2026.9.12" },
-    { name = "vllm" },
 ]
 
 [[package]]
