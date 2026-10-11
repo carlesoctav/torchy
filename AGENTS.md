@@ -18,8 +18,7 @@ These rules and preferences must be strictly followed when working in this repos
 - **Never use `os.environ` in configs:** Configuration files in `configs/` must define clean, explicit Python defaults directly on `sws.Config()`. Never use `os.environ.get(...)`. Overrides should happen via CLI arguments or config inheritance.
 
 ## 4. Execution & Long-Running Commands
-- **Use agent background capabilities:** When running long-running commands (such as `mycolab run` or servers), execute them as asynchronous/background tasks using agent tooling so the assistant never hangs waiting. Do not alter shell scripts with artificial `--background` flags.
-- **No `lora_proxy`:** Always use the direct in-process patch `torchy.patch.wait_lora_patch` on `VLLMClient` instead of running a separate proxy process.
+- **Use agent background capabilities:** When running long-running commands (such as `mycolab run` or servers), execute them as asynchronous/background tasks using agent tooling so the assistant never hangs waiting.
 
 ## 5. Security & Credentials
 - **Never hardcode secrets or tokens in code:** Never embed API keys, write tokens, or credentials (such as Trackio tokens, HF tokens, etc.) directly in source files. Rely exclusively on external environment variables or configuration files.
