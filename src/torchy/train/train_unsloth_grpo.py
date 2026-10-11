@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+import sws
+from transformers import TrainerCallback
+
+from torchy.env import make_env
+from torchy.sws_utils import run as sws_run
+from torchy.patch import patch_save_tokenizer
+
+
+
+def main(config: sws.FinalConfig):
+    os.environ["UNSLOTH_VLLM_STANDBY"] = "1" if config.get("unsloth_standby") else "0"
+    from unsloth import FastLanguageModel
+    from trl import GRPOConfig, GRPOTrainer
+    patch_save_tokenizer()
+
+    from torchy.callback import BucketSyncCallback
+
+    env_dict = make_env(config.env_name, config.env.to_dict())
+
+    model, tokenizer = FastLanguageModel.from_pretrained(**config.model.to_dict())
+    model = FastLanguageModel.get_peft_model(model, **config.lora.to_dict())
+
+    args = GRPOConfig(**config.grpo.to_dict())
+
+
+    config_json = Path(f"{config.output_dir}/config.json")
+    config_json.parent.mkdir(parents = True, exist_ok=True)
+
+    with config_json.open("w") as f:
+        f.write(config.to_json())
+
+    # bucket_sync = BucketSyncCallback(config)
+    # callbacks: list[TrainerCallback] = [bucket_sync]
+    trainer = GRPOTrainer(
+        model=model,
+        processing_class=tokenizer,
+        args=args,
+        # callbacks=callbacks,
+        **env_dict
+    )
+    try:
+        trainer.train()
+    finally:
+        if config.get("repo_id"):
+            model.push_to_hub_merged(f"{config.repo_id}", tokenizer, save_method = "merged_16bit")
+        else:
+            model.save_pretrained_merged(f"{config.output_dir}/merged", tokenizer, save_method = "merged_16bit")
+        bucket_sync.shutdown()
+
+
+if __name__ == "__main__":
+    sws_run(main)
