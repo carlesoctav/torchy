@@ -93,7 +93,13 @@ class QwenMathReward:
             if self.max_completion_length > 0 and len(ids) >= self.max_completion_length:
                 rewards.append(0.0)
                 continue
-            answer = _last_boxed(completion[0]["content"])
+            if isinstance(completion, list) and completion and isinstance(completion[0], dict):
+                content = completion[0].get("content", "")
+            elif isinstance(completion, dict):
+                content = completion.get("content", "")
+            else:
+                content = str(completion)
+            answer = _last_boxed(content)
             if answer is None:
                 rewards.append(0.0)
             elif _normalize(answer) == _normalize(gold):
@@ -144,7 +150,9 @@ def make(
     reward_fn = make_qwen_math_reward(max_completion_length=max_completion_length)
 
     return {
+        "dataset": dataset,
         "train_dataset": dataset,
+        "eval_dataset": dataset,
         "reward_funcs": reward_fn,
         "processing_class": tokenizer,
     }
