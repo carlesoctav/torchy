@@ -39,7 +39,6 @@ def main(config: sws.FinalConfig):
     _create_model_from_path = async_grpo_trainer.create_model_from_path
 
     def _create_model_untied(model_id, **kwargs):
-        kwargs["attn_implementation"] = "sdpa"
         model = _create_model_from_path(model_id, **kwargs)
         if hasattr(model, "lm_head") and hasattr(model, "config"):
             model.lm_head.weight = torch.nn.Parameter(model.lm_head.weight.detach().clone())

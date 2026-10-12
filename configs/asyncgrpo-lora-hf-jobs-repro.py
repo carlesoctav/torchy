@@ -17,7 +17,7 @@ def get_config():
     """
     config = sws.Config()
 
-    config.exp_name = "qwen2.5-math-1.5b-r1"
+    config.exp_name = "qwen2.5-math-1.5b-r1-b128"
     config.project_name = "async-grpo-lora-hf-repro"
     config.bucket_id = "carlesoctav/multi-serverasync-grpo"
     config.output_dir = lambda: f"/content/lora/{config.project_name}/{config.exp_name}"
@@ -43,8 +43,9 @@ def get_config():
     config.grpo.temperature = 1.0
     config.grpo.top_p = 1.0
     config.grpo.max_completion_length = 3000
-    config.grpo.per_device_train_batch_size = 32
-    config.grpo.gradient_accumulation_steps = 4
+    config.grpo.token_budget = 0
+    config.grpo.per_device_train_batch_size = 8
+    config.grpo.gradient_accumulation_steps = 16
     config.grpo.gradient_checkpointing = True
     config.grpo.max_staleness = 4
     config.grpo.max_inflight_tasks = 128
