@@ -17,5 +17,7 @@ raw/
 unsloth_compiled_cache/
 temp/
 .workmux/
+.workmux.yaml
 .mycolab/
+logs/
 

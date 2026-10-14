@@ -47,9 +47,17 @@ def main(config: sws.FinalConfig):
 
     async_grpo_trainer.create_model_from_path = _create_model_untied
 
-    env_dict = make_env(config.env_name, config.env.to_dict())
-    model_dict = config.model.to_dict()
-    args = AsyncGRPOConfig(**config.grpo.to_dict())
+    from peft import LoraConfig
+
+    env_dict = make_env(config.env_name, config.env.to_dict() if hasattr(config.env, "to_dict") else dict(config.env))
+    model_dict = config.model.to_dict() if hasattr(config.model, "to_dict") else dict(config.model)
+    if getattr(config.model, "peft_config", None) is not None:
+        peft_cfg = config.model.peft_config
+        peft_dict = peft_cfg.to_dict() if hasattr(peft_cfg, "to_dict") else dict(peft_cfg)
+        model_dict["peft_config"] = LoraConfig(**peft_dict)
+
+    grpo_dict = config.grpo.to_dict() if hasattr(config.grpo, "to_dict") else dict(config.grpo)
+    args = AsyncGRPOConfig(**grpo_dict)
 
     config_json = Path(f"{config.output_dir}/config.json")
     config_json.parent.mkdir(parents=True, exist_ok=True)
