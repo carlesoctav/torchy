@@ -20,7 +20,43 @@ import pandas as pd
 import requests
 from datasets import Dataset
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from transformers.utils.chat_template_utils import get_json_schema
 from trl.chat_template_utils import add_response_schema, parse_response
+from renderers import ToolCallParseStatus, create_renderer
+
+
+def _convert_tools_to_schemas(tools: list[Any] | None) -> list[dict[str, Any]] | None:
+    """Convert a list of Python callables or dicts into OpenAI-compatible tool schemas for renderers."""
+    if not tools:
+        return None
+    schemas = []
+    for tool in tools:
+        if isinstance(tool, dict):
+            schemas.append(tool)
+        elif callable(tool):
+            try:
+                schemas.append(get_json_schema(tool))
+            except Exception:
+                sig = inspect.signature(tool)
+                props = {k: {"type": "string"} for k in sig.parameters.keys()}
+                schemas.append({
+                    "type": "function",
+                    "function": {
+                        "name": getattr(tool, "__name__", str(tool)),
+                        "description": inspect.getdoc(tool) or f"Call {getattr(tool, '__name__', str(tool))}.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": props,
+                            "required": [
+                                k for k, p in sig.parameters.items()
+                                if p.default == inspect.Parameter.empty
+                            ],
+                        },
+                    },
+                })
+        else:
+            schemas.append(tool)
+    return schemas
 
 # Ensure repo root and src/ are importable
 _REPO_ROOT = Path(__file__).resolve().parents[3]  # src/torchy/benchmark/trl_bench.py -> repo root
@@ -102,6 +138,94 @@ class BenchmarkEnv:
             except Exception as e:
                 logger.warning(f"Could not apply add_response_schema: {e}")
         self.tokenizer = tokenizer
+
+        try:
+            self.renderer = create_renderer(
+                self.tokenizer,
+                chat_template_kwargs=self.chat_template_kwargs,
+            )
+            logger.info(
+                f"Initialized renderer {type(self.renderer).__name__} "
+                f"(is_prefix_stable={self.renderer.is_prefix_stable})"
+            )
+        except Exception as e:
+            logger.warning(
+                f"Could not initialize custom renderer with chat_template_kwargs {self.chat_template_kwargs}: {e}. "
+                "Falling back to default renderer."
+            )
+            self.renderer = create_renderer(self.tokenizer)
+
+    def _parse_completion(
+        self,
+        turn_ids: list[int],
+        prompt_ids: list[int],
+        turn_text: str,
+        tool_schemas: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Parse completion tokens into an assistant message dict using the renderer."""
+        reasoning = ""
+        content_text = ""
+        parsed_calls = []
+
+        try:
+            parsed = self.renderer.parse_response(
+                turn_ids,
+                prompt_ids=prompt_ids,
+                tools=tool_schemas,
+            )
+            reasoning = parsed.reasoning_content or ""
+            content_text = parsed.content or ""
+            for i, tc in enumerate(parsed.tool_calls):
+                if tc.status == ToolCallParseStatus.OK and tc.name:
+                    parsed_calls.append({
+                        "id": tc.id or f"call_{i}",
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.arguments)
+                            if isinstance(tc.arguments, dict)
+                            else (tc.arguments or "{}"),
+                        },
+                    })
+        except Exception as e:
+            logger.warning(f"renderer.parse_response failed: {e}. Falling back to trl parse_response.")
+            assistant_msg = parse_response(self.tokenizer, turn_ids, prefix=prompt_ids)
+            reasoning = assistant_msg.get("reasoning_content", "")
+            content_text = assistant_msg.get("content", "")
+            parsed_calls = assistant_msg.get("tool_calls", [])
+
+        # Fallback regex if tool call was in text but parser missed it
+        if not parsed_calls and "<tool_call>" in turn_text:
+            m = re.search(
+                r"<tool_call>\s*(.*?)\s*</tool_call>", turn_text, re.DOTALL
+            )
+            if m:
+                try:
+                    parsed_tc = json.loads(m.group(1))
+                    if "name" in parsed_tc:
+                        parsed_calls = [
+                            {
+                                "id": "call_0",
+                                "type": "function",
+                                "function": {
+                                    "name": parsed_tc["name"],
+                                    "arguments": json.dumps(parsed_tc.get("arguments", {}))
+                                    if isinstance(parsed_tc.get("arguments"), dict)
+                                    else (parsed_tc.get("arguments") or "{}"),
+                                },
+                            }
+                        ]
+                except Exception:
+                    pass
+
+        msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": content_text,
+            "reasoning_content": reasoning,
+        }
+        if parsed_calls:
+            msg["tool_calls"] = parsed_calls
+        return msg
 
     @classmethod
     def from_config(cls, config: sws.FinalConfig) -> BenchmarkEnv:
@@ -401,6 +525,7 @@ class BenchmarkEnv:
                 if not getattr(m, "__doc__", None):
                     m.__func__.__doc__ = f"Call {m.__name__}."
             tool_dict = {m.__name__: m for m in env_methods}
+            tool_schemas = _convert_tools_to_schemas(env_methods)
 
             tool_calls_count = 0
             tool_failures_count = 0
@@ -408,15 +533,15 @@ class BenchmarkEnv:
             turns = 0
             trace_log = []
 
-            while True:
-                prompt_ids = self.tokenizer.apply_chat_template(
-                    messages,
-                    return_dict=False,
-                    add_generation_prompt=True,
-                    tools=env_methods or None,
-                    **self.chat_template_kwargs,
-                )
+            # Initial turn prompt tokens using renderer
+            prompt_ids = self.renderer.render_ids(
+                messages,
+                tools=tool_schemas,
+                add_generation_prompt=True,
+            )
+            all_trajectory_tokens = list(prompt_ids)
 
+            while True:
                 turn_ids, turn_text = await self._generate_one_turn(
                     session, prompt_ids
                 )
@@ -429,29 +554,9 @@ class BenchmarkEnv:
                     })
                     break
 
-                assistant_message = parse_response(
-                    self.tokenizer, turn_ids, prefix=prompt_ids
+                assistant_message = self._parse_completion(
+                    turn_ids, prompt_ids, turn_text, tool_schemas=tool_schemas
                 )
-
-                if not assistant_message.get("tool_calls") and "<tool_call>" in turn_text:
-                    m = re.search(
-                        r"<tool_call>\s*(.*?)\s*</tool_call>", turn_text, re.DOTALL
-                    )
-                    if m:
-                        try:
-                            parsed_tc = json.loads(m.group(1))
-                            if "name" in parsed_tc:
-                                assistant_message["tool_calls"] = [
-                                    {
-                                        "type": "function",
-                                        "function": {
-                                            "name": parsed_tc["name"],
-                                            "arguments": parsed_tc.get("arguments", {}),
-                                        },
-                                    }
-                                ]
-                        except Exception:
-                            pass
 
                 messages.append(assistant_message)
                 turns += 1
@@ -469,11 +574,13 @@ class BenchmarkEnv:
                     turn_trace["tool_calls"] = tool_calls
 
                 if not tool_calls:
+                    all_trajectory_tokens.extend(turn_ids)
                     trace_log.append(turn_trace)
                     break
 
                 if turns >= self.max_tool_calling_iterations:
                     turn_trace["stop_reason"] = "max_iterations"
+                    all_trajectory_tokens.extend(turn_ids)
                     trace_log.append(turn_trace)
                     break
 
@@ -489,7 +596,26 @@ class BenchmarkEnv:
                 trace_log.append(turn_trace)
 
                 if getattr(env, "done", False):
+                    all_trajectory_tokens.extend(turn_ids)
                     break
+
+                # Bridge to next turn without re-tokenizing previous prompt/completions (100% prefix cache preservation)
+                bridge = self.renderer.bridge_to_next_turn(
+                    previous_prompt_ids=prompt_ids,
+                    previous_completion_ids=turn_ids,
+                    new_messages=tool_msgs,
+                    tools=tool_schemas,
+                )
+                if bridge is not None:
+                    prompt_ids = bridge.token_ids
+                else:
+                    logger.debug("bridge_to_next_turn returned None, falling back to render_ids")
+                    prompt_ids = self.renderer.render_ids(
+                        messages,
+                        tools=tool_schemas,
+                        add_generation_prompt=True,
+                    )
+                all_trajectory_tokens = list(prompt_ids)
 
             if hasattr(env, "get_reward"):
                 reward = env.get_reward()
@@ -521,16 +647,12 @@ class BenchmarkEnv:
                         break
 
             try:
-                rendered_trace = self.tokenizer.apply_chat_template(
-                    messages,
-                    tools=env_methods or None,
-                    tokenize=False,
-                    **self.chat_template_kwargs,
-                )
+                rendered_trace = self.tokenizer.decode(all_trajectory_tokens)
             except Exception:
                 try:
                     rendered_trace = self.tokenizer.apply_chat_template(
                         messages,
+                        tools=env_methods or None,
                         tokenize=False,
                         **self.chat_template_kwargs,
                     )

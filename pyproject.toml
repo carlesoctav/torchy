@@ -13,6 +13,7 @@ dependencies = [
     "math-verify>=0.9.0",
     "openenv-textarena",
     "openenv[harbor]",
+    "renderers",
     "sws-config>=0.10.0",
     "trackio>=0.39.0",
     "trl[vllm]>=0.24.0",
@@ -36,6 +37,7 @@ override-dependencies = [
 openenv-textarena = { git = "https://huggingface.co/spaces/openenv/wordle" }
 trl = { git = "https://github.com/carlesoctav/trl" }
 openenv = { git = "https://github.com/huggingface/OpenEnv" }
+renderers = { path = "../renderers", editable = true }
 
 [build-system]
 requires = ["uv_build>=0.12.12,<0.13.0"]
