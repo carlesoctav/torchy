@@ -150,9 +150,7 @@ def make(
     reward_fn = make_qwen_math_reward(max_completion_length=max_completion_length)
 
     return {
-        "dataset": dataset,
         "train_dataset": dataset,
-        "eval_dataset": dataset,
         "reward_funcs": reward_fn,
         "processing_class": tokenizer,
     }

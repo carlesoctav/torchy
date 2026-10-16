@@ -356,7 +356,20 @@ class ColabSession:
         if remote_work_dir:
             cmd_str = f"cd {shlex.quote(remote_work_dir)} && {cmd_str}"
 
-        full_env = env or {}
+        merged_env = {}
+        mycolab_env_path = Path.home() / ".config" / "mycolab" / "env.json"
+        if mycolab_env_path.exists():
+            try:
+                import json
+                with mycolab_env_path.open() as f:
+                    merged_env.update(json.load(f))
+            except Exception as e:
+                logger.warning(f"Failed to read {mycolab_env_path}: {e}")
+
+        if env:
+            merged_env.update(env)
+
+        full_env = merged_env
         if full_env:
             exports = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in full_env.items())
             cmd_str = f"export {exports} && {cmd_str}"

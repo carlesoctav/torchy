@@ -50,6 +50,8 @@ def main(config: sws.FinalConfig):
     from peft import LoraConfig
 
     env_dict = make_env(config.env_name, config.env.to_dict() if hasattr(config.env, "to_dict") else dict(config.env))
+    env_dict.pop("dataset", None)
+    env_dict.pop("eval_dataset", None)
     model_dict = config.model.to_dict() if hasattr(config.model, "to_dict") else dict(config.model)
     if getattr(config.model, "peft_config", None) is not None:
         peft_cfg = config.model.peft_config

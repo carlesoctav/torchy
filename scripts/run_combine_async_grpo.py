@@ -109,6 +109,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
 
     # ColabSession kwargs from config.infra.inference and config.infra.train
     inf_session_kwargs = cfg.infra.inference.to_dict()
+    inf_session_env = inf_session_kwargs.pop("env_vars", {})
     if extra_args.reuse:
         inf_session_kwargs["reuse"] = True
     if extra_args.stop_vm:
@@ -117,6 +118,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
         inf_session_kwargs["gpu"] = extra_args.gpu
 
     train_session_kwargs = cfg.infra.train.to_dict()
+    trainer_session_env = train_session_kwargs.pop("env_vars", {})
     if extra_args.reuse:
         train_session_kwargs["reuse"] = True
     if extra_args.stop_vm:
@@ -166,10 +168,13 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
         wait_for_vllm_ready(port=vllm_port, timeout=300)
 
         logger.info(f"Starting trainer on '{trainer_session.session}'...")
+        trainer_env = getattr(cfg.infra.train, "env_vars", None)
+        trainer_env_dict = trainer_env.to_dict() if hasattr(trainer_env, "to_dict") else (dict(trainer_env) if trainer_env else {})
         trainer_proc = trainer_session.Popen(
             cmd=trainer_cmd,
             log_path=log_dir / "trainer.log",
             dir={str(root_dir): torchy_dir},
+            env=trainer_env_dict,
         )
         pg.add("trainer", trainer_proc, session=trainer_session)
 
